@@ -41,11 +41,14 @@ Keep the source tree stable while taking a snapshot. Backup checks each file's
 size and modification metadata during the read and assembles the snapshot file
 by file. Case-distinct Linux paths can conflict on a case-insensitive restore volume.
 
+The list command prints snapshot IDs in lexical order.
 The verifier checks the manifest syntax and the referenced object contents.
 Run `cv verify vault` to check every published snapshot.
 The restore command validates data before publishing the completed directory
 without overwriting the destination. Directory publication requires native
-no-replace rename support on Linux. Interrupted writes can leave temporary
+no-replace rename support on Linux. In WSL, use the Linux filesystem for
+the restore destination. Mounted Windows drives (such as /mnt/c) may lack
+the required directory rename support. Interrupted writes can leave temporary
 files and unreferenced chunks. Use `cv recover vault` to list abandoned
 repository temporary files and `cv recover vault --remove` to delete them.
 Recovery excludes active backups with a repository lock. Unreferenced

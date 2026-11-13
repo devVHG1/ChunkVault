@@ -129,5 +129,5 @@ file(READ "${TEST_DIR}/object" raced_bytes HEX)
 if((NOT object_race STREQUAL "0;1" AND NOT object_race STREQUAL "1;0")
    OR NOT raced_bytes STREQUAL "000aff" OR EXISTS "${TEST_DIR}/object.tmp"
    OR EXISTS "${TEST_DIR}/object-other.tmp")
-    message(FATAL_ERROR "Concurrent chunk storage did not publish exactly one object")
+    message(FATAL_ERROR "Concurrent chunk storage returned ${object_race}, destination bytes: ${raced_bytes}")
 endif()

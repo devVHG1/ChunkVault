@@ -74,8 +74,9 @@ static enum cv_chunk_store_result check_existing(const cv_path_char *destination
     cv_sha256_finish(&hash, digest);
 
     enum cv_chunk_verify_result verified = cv_chunk_verify(file, size, digest);
-    int unchanged = cv_source_unchanged(file, &stamp);
-    if (fclose(file) != 0 || !unchanged || verified == CV_CHUNK_READ_ERROR) {
+    /* Removing the staging hard link can change ctime after publication.
+     * Reuse depends on the complete byte count and digest. */
+    if (fclose(file) != 0 || verified == CV_CHUNK_READ_ERROR) {
         return CV_CHUNK_STORE_ERROR;
     }
     return verified == CV_CHUNK_VALID ? CV_CHUNK_REUSED : CV_CHUNK_CONFLICT;

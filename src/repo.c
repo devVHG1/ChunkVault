@@ -471,6 +471,9 @@ struct snapshot_scan {
     const char *root;
     int verify;
     int valid;
+    size_t count;
+    size_t capacity;
+    char (*ids)[65];
 };
 
 static int scan_snapshot(const char *name, void *context)
@@ -493,15 +496,41 @@ static int scan_snapshot(const char *name, void *context)
         }
         return 1;
     }
-    return puts(id) != EOF;
+    if (scan->count == scan->capacity) {
+        if (scan->capacity > SIZE_MAX / sizeof *scan->ids / 2) {
+            return 0;
+        }
+        size_t capacity = scan->capacity ? scan->capacity * 2 : 32;
+        void *ids = realloc(scan->ids, capacity * sizeof *scan->ids);
+        if (!ids) {
+            return 0;
+        }
+        scan->ids = ids;
+        scan->capacity = capacity;
+    }
+    memcpy(scan->ids[scan->count++], id, length - 3);
+    return 1;
+}
+
+static int compare_snapshot_ids(const void *a, const void *b)
+{
+    return strcmp(a, b);
 }
 
 static int scan_snapshots(const char *root, int verify)
 {
     char *path = cv_join(root, "snapshots");
-    struct snapshot_scan scan = {root, verify, 1};
+    struct snapshot_scan scan = {.root = root, .verify = verify, .valid = 1};
     int ok = path && repository_version(root) && cv_visit(path, scan_snapshot, &scan);
     free(path);
+    if (ok && scan.count > 0) {
+        qsort(scan.ids, scan.count, sizeof *scan.ids, compare_snapshot_ids);
+        for (size_t i = 0; ok && i < scan.count; ++i) {
+            ok = puts(scan.ids[i]) != EOF;
+        }
+        ok = fflush(stdout) == 0 && ok;
+    }
+    free(scan.ids);
     if (!ok) {
         fputs(verify ? "cv: cannot scan repository\n" : "cv: cannot list snapshots\n", stderr);
     }
@@ -539,19 +568,27 @@ static int read_file(FILE *manifest, const char *objects, FILE *output,
         char *path = object_path(objects, expected);
         struct cv_source_stamp stamp;
         FILE *object = path ? cv_open_source(path, &stamp) : NULL;
-        free(path);
         if (!object) {
+            fprintf(stderr, "cv: missing or unreadable chunk: %s\n", path ? path : "(path unavailable)");
+            free(path);
             return 0;
         }
         if (stamp.size != wanted) {
+            fprintf(stderr, "cv: incorrect chunk size: %s\n", path);
+            free(path);
             fclose(object);
             return 0;
         }
         size_t count;
         int ok = cv_chunk_read(object, buffer, (size_t)wanted, &count, actual) == CV_CHUNK_OK
                  && count == wanted && memcmp(expected, actual, sizeof expected) == 0
-                 && fgetc(object) == EOF && !ferror(object) && cv_source_unchanged(object, &stamp);
-        if (!close_file(object, ok) || (output && fwrite(buffer, 1, count, output) != count)) {
+                 && fgetc(object) == EOF && !ferror(object);
+        ok = close_file(object, ok);
+        if (!ok) {
+            fprintf(stderr, "cv: chunk integrity check failed: %s\n", path);
+        }
+        free(path);
+        if (!ok || (output && fwrite(buffer, 1, count, output) != count)) {
             return 0;
         }
         remaining -= count;
@@ -746,7 +783,12 @@ static int restore(FILE *manifest, const struct cv_source_stamp *stamp,
 {
     size_t length = strlen(output);
     if (length == 0 || output[length - 1] == '/' || output[length - 1] == '\\'
-        || cv_kind(output) != CV_FILE_MISSING || length > (size_t)-1 - 48) {
+        || length > (size_t)-1 - 48) {
+        fputs("cv: invalid restore destination path\n", stderr);
+        return 0;
+    }
+    if (cv_kind(output) != CV_FILE_MISSING) {
+        fprintf(stderr, "cv: restore destination exists or is inaccessible: %s\n", output);
         return 0;
     }
     char *pending = malloc(length + 48);
@@ -762,7 +804,11 @@ static int restore(FILE *manifest, const struct cv_source_stamp *stamp,
 #ifndef _WIN32
     ready = ready && sync_restored_directory(pending);
 #endif
-    int published = ready && cv_publish(from, to) == CV_PUBLISH_OK;
+    enum cv_publish_result result = ready ? cv_publish(from, to) : CV_PUBLISH_ERROR;
+    int published = result == CV_PUBLISH_OK;
+    if (ready && !published) {
+        fprintf(stderr, "cv: cannot publish restore without replacing the destination: %s\n", output);
+    }
     int ok = published && cv_sync_parent(output);
     if (published && !ok) {
         fputs("cv: restore is visible but directory synchronization failed\n", stderr);
@@ -794,7 +840,7 @@ int cv_repo_read(const char *root, const char *snapshot, const char *output)
         ok = close_file(file, ok);
     }
     if (!ok) {
-        fputs(output ? "cv: restore failed (destination must be new)\n"
+        fputs(output ? "cv: restore failed\n"
                      : "cv: snapshot verification failed\n", stderr);
     }
     free(path);
