@@ -66,7 +66,7 @@ int main(void)
     }
 
     struct sample_chunk original[MAX_CHUNKS], shifted[MAX_CHUNKS];
-    size_t first_count, second_count;
+    size_t first_count = 0, second_count = 0;
     int ok = collect(data + 1, SAMPLE_SIZE, original, &first_count)
              && collect(data, SAMPLE_SIZE + 1, shifted, &second_count);
     free(data);

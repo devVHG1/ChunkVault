@@ -1,3 +1,4 @@
+#include "failpoint.h"
 #include "chunk.h"
 
 #include "fs.h"
@@ -101,6 +102,9 @@ enum cv_chunk_store_result cv_chunk_store(const cv_path_char *temporary,
     }
 
     enum cv_publish_result published = cv_publish(temporary, destination);
+    if (published == CV_PUBLISH_OK || published == CV_PUBLISH_TEMP_REMAINS) {
+        cv_crash_at("object-visible");
+    }
     if (published == CV_PUBLISH_OK) {
         return CV_CHUNK_STORED;
     }

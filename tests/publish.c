@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
         enum cv_chunk_store_result stored = cv_chunk_store(
             temporary, PATH_LITERAL("object"),
             bytes, sizeof bytes, &cleanup_pending);
-        return cleanup_pending ? 5 : stored;
+        return cleanup_pending ? 5 : (int)stored;
     }
 
     if (argv[1][0] == '5' || argv[1][0] == '7' || argv[1][0] == '8') {

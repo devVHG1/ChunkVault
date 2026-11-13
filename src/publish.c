@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 #endif
 
+#include "failpoint.h"
 #include "publish.h"
 
 #include <errno.h>
@@ -45,13 +46,20 @@ enum cv_stage_result cv_stage(const cv_path_char *temporary,
     }
 #endif
 
+    cv_crash_at("staged-open");
     int written = (size == 0 || fwrite(data, 1, size, file) == size)
                   && fflush(file) == 0;
+    if (written) {
+        cv_crash_at("staged-write");
+    }
 #ifdef _WIN32
     int flushed = written && _commit(_fileno(file)) == 0;
 #else
     int flushed = written && fsync(fileno(file)) == 0;
 #endif
+    if (flushed) {
+        cv_crash_at("staged-flush");
+    }
     int closed = fclose(file) == 0;
     if (flushed && closed) {
         return CV_STAGE_OK;

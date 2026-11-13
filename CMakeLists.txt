@@ -23,6 +23,20 @@ install(TARGETS cv RUNTIME DESTINATION bin)
 
 include(CTest)
 if(BUILD_TESTING)
+    get_target_property(cv_storage_sources cv_storage SOURCES)
+    add_executable(test_cv_interruption src/main.c src/repo.c ${cv_storage_sources})
+    set_target_properties(test_cv_interruption PROPERTIES
+        C_STANDARD 17 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+    target_compile_definitions(test_cv_interruption PRIVATE
+        CV_TEST_FAILPOINTS CV_VERSION="${PROJECT_VERSION}")
+    if(WIN32)
+        target_link_libraries(test_cv_interruption PRIVATE shell32)
+    endif()
+    add_test(NAME cli.interruption COMMAND "${CMAKE_COMMAND}"
+        "-DCV=$<TARGET_FILE:cv>" "-DCRASH_CV=$<TARGET_FILE:test_cv_interruption>"
+        "-DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/interruption-$<CONFIG>"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/interruption.cmake")
+
     add_executable(test_source tests/source.c)
     target_link_libraries(test_source PRIVATE cv_storage)
     set_target_properties(test_source PROPERTIES

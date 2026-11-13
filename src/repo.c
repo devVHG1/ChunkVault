@@ -1,3 +1,4 @@
+#include "failpoint.h"
 #include "repo.h"
 
 #include "cdc.h"
@@ -437,6 +438,9 @@ int cv_repo_backup(const char *root, const char *source, const char *snapshot)
         ok = close_file(file, ok);
     }
 
+    if (ok) {
+        cv_crash_at("manifest-ready");
+    }
     enum cv_publish_result published = ok && cv_sync_directory(objects)
         ? cv_publish(temp_native, destination_native) : CV_PUBLISH_ERROR;
     ok = published == CV_PUBLISH_OK || published == CV_PUBLISH_TEMP_REMAINS;
@@ -445,6 +449,9 @@ int cv_repo_backup(const char *root, const char *source, const char *snapshot)
         if (!cv_remove_temp(temp_native)) {
             fputs("cv: manifest temporary file requires cleanup\n", stderr);
         }
+    }
+    if (ok) {
+        cv_crash_at("manifest-visible");
     }
     if (ok && !cv_sync_directory(snapshots)) {
         fputs("cv: snapshot is visible but directory synchronization failed\n", stderr);
@@ -566,7 +573,7 @@ static int read_file(FILE *manifest, const char *objects, FILE *output,
             return 0;
         }
         char *path = object_path(objects, expected);
-        struct cv_source_stamp stamp;
+        struct cv_source_stamp stamp = {0};
         FILE *object = path ? cv_open_source(path, &stamp) : NULL;
         if (!object) {
             fprintf(stderr, "cv: missing or unreadable chunk: %s\n", path ? path : "(path unavailable)");
