@@ -56,16 +56,42 @@ published chunks and temporary restore directories are outside its scope.
 
 See the [draft format](docs/format.md) for the byte layout.
 
-## Local benchmark
+## Demo: two snapshots and a byte-for-byte restore
 
-Use Python 3.9 or later to reproduce the benchmark with your built executable.
+Run the demo with Python 3.9 or later and a built executable.
 
-```sh
-python tools/benchmark.py path/to/cv
+```powershell
+python tools/benchmark.py build/Release/cv.exe
 ```
 
-In one Windows run, the first snapshot of a 16 MiB file stored 16 MiB of
-objects. The second snapshot, after one byte was inserted at the start, added
-41,532 bytes of objects. The first backup took 0.632 s, the second took
-0.236 s, and verification plus restoration took 0.226 s. These timings
-include command startup and apply to that machine and workload.
+```sh
+python3 tools/benchmark.py build/cv
+```
+
+The script creates a temporary vault and backs up a 16 MiB file. It inserts
+one byte at the beginning of that file and takes a second snapshot. Then it
+runs `cv verify`, restores the second snapshot, and compares the restored
+file byte for byte with the modified input.
+
+| Measurement | Example Windows run |
+| --- | ---: |
+| First snapshot chunk data | 16,777,216 bytes |
+| New chunk data for the second snapshot | 41,532 bytes |
+| Second snapshot manifest | 7,268 bytes |
+| Restored file | Byte-for-byte match |
+
+The second snapshot added 48,800 bytes in chunk and manifest contents.
+Filesystem allocation overhead is excluded. Content-defined chunking found
+matching chunks again after the insertion shifted the rest of the file.
+
+## Reliability and limits
+
+CTest exercises interrupted backup at six points, malformed manifests, and
+concurrent writes. GitHub Actions builds and tests Debug and Release on
+Windows with MSVC and on Ubuntu with GCC. See the
+[CI results](https://github.com/devVHG1/ChunkVault/actions).
+
+The on-disk format is a draft. The backup preserves file contents and
+directory structure. Permissions and timestamps are outside its scope.
+The interruption tests simulate process termination. Power-loss behavior
+has yet to be validated.

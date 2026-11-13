@@ -40,6 +40,8 @@ def benchmark(executable, size):
         input_file.write_bytes(modified)
         second = run(executable, "backup", repository, source, "shifted")
         added_bytes = object_bytes(repository) - initial_bytes
+        manifest_bytes = (repository / "snapshots" / "shifted.cvm").stat().st_size
+        run(executable, "verify", repository, "shifted")
         restore = run(executable, "restore", repository, "shifted", restored)
         if (restored / input_file.name).read_bytes() != modified:
             raise RuntimeError("restored bytes differ from the input")
@@ -48,7 +50,9 @@ def benchmark(executable, size):
         print(f"First backup            {first:.3f} s")
         print(f"First snapshot objects  {initial_bytes:,} bytes")
         print(f"Second backup           {second:.3f} s")
-        print(f"Second snapshot adds    {added_bytes:,} bytes")
+        print(f"New chunk bytes         {added_bytes:,} bytes")
+        print(f"Second manifest         {manifest_bytes:,} bytes")
+        print("Restored bytes          Match the modified input")
         print(f"Restore                 {restore:.3f} s")
 
 
